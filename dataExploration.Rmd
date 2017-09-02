@@ -1,0 +1,121 @@
+---
+title: "La Haute Borne Data Exploration"
+output:
+  html_notebook: default
+  github_document: default
+---
+# Data Exploration Project
+```{r setup, include = FALSE}
+library(ggplot2)
+library(viridis)
+```
+
+Data:
+```{r}
+knitr::kable(
+  data[1:5, 1:8], 
+  caption = "The data table."
+)
+```
+
+These are measurments every 10 mins, and so there should be 144 measurments per day.
+Check that we are dealing with just year 2017, with `r unique(year(data$Date_time))`.
+Count how many measurements were made each month
+```{r}
+data %>% 
+    group_by(month, Turbine) %>%
+    count() #tally() 
+```
+
+
+
+## Missing values
+
+How many missing values?
+```{r}
+sum(is.na(data$P_avg))
+```
+missing values per col:
+```{r}
+na_count <-sapply(data, function(y) sum(is.na(y)))
+```
+this tells us which vars have a lot of data missing.
+```{r}
+na_log <- na_count < 10000 # creats a logical vector for subsetting
+```
+most vars have a few hundred obs missing, however there are 5 vars with 
+50% or more missing obs, and one with around 10,000 missing obs.
+```{r}
+table(na_log) # how many have at least 10000 obs missing
+data <- data[, na_log] # remove those vars
+sapply(data, function(y) sum(is.na(y))) # recheck
+```
+these vars have few hundred missing obs.
+```{r}
+data %>%
+    filter(is.na(Ba_avg)) %>% # to show just NA cols
+    sapply(function(y) sum(is.na(y))) # this whole block of data is missing
+```
+```{r}
+data %>%
+    filter(is.na(Ba_avg)) %>%
+    select(c(1:5)) %>%
+    summary()
+```
+This show us it's not just one turbine etc.
+Next let's count the NAs per day
+```{r}
+data %>%
+    filter(is.na(Ba_avg)) %>%
+    group_by(jday, Turbine) %>%
+    summarise(count = n()) %>%
+    ggplot(aes(jday, count, colour = Turbine)) +
+    geom_line()
+```
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+L*.
+
+## Special Values
+ 
+Now look at times when the turbine stopped rotating. First look at the distribution of avg rotation speed.
+```{r}
+summary(data$Rs_avg) # note: there are 843 missing values in this set.
+```
+```{r}
+ggplot(data, aes(Rs_avg, colour = Turbine)) +
+    geom_freqpoly(binwidth = 0.2) #+ 
+    #coord_cartesian(xlim = c(2, 7))
+```
+This strange distribution can probably be explained by how a turbine is operated.
+Are there any values between 2 and 7?
+```{r}
+data %>% filter(between(Rs_avg, 2, 7)) %>% group_by(Turbine) %>% 
+    summarise(count = n())
+```
+there are some, but not so many, let's look at their dist:
+```{r}
+ggplot(filter(data, between(Rs_avg, 2, 7)), aes(Rs_avg, colour = Turbine)) +
+    geom_freqpoly(binwidth = 0.2) 
+```
+quite spread out over range. This is prob the slowing down and speeding up to normal operational speed. There is a concentration at rot-speed = 0. This will prob happen when wind is too low or too high, or during maintenance. To answer this let's look at the dist of wind speed for these values
+```{r}
+summary(data$Ws_avg)
+```
+It looks like the rotor speed goes to zero mostly because the wind speed is too low.
+```{r}
+ggplot(data, aes(Ws_avg, ..density.., fill = Rs_avg < 2)) +
+    geom_histogram(position = "dodge")
+```
+This is an important plot!
+```{r}
+ggplot(filter(data, Rs_avg < 2 & Turbine == "T1"), aes(jday)) +
+    geom_histogram(binwidth = 1)
+```
+are these zero rotor speed in series in time or random, plot duration of zero rotor speed
+
+This next plot shows how many times per day the rotor stopped
+```{r}
+ggplot(filter(data, Rs_avg < 0.01)) +
+    geom_bar(mapping = aes(x = jday, fill = Turbine), position = "dodge")
+```
+
+
