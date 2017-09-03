@@ -6,8 +6,9 @@ output:
 ---
 # Data Exploration Project
 ```{r setup, include = FALSE}
-library(ggplot2)
+library(tidyverse)
 library(viridis)
+library(lubridate)
 ```
 
 Data:
@@ -117,5 +118,117 @@ This next plot shows how many times per day the rotor stopped
 ggplot(filter(data, Rs_avg < 0.01)) +
     geom_bar(mapping = aes(x = jday, fill = Turbine), position = "dodge")
 ```
+
+let's look at other variables
+```{r}
+summary(data$Ds_avg) # note: there are 768 missing values in this set.
+ggplot(data, aes(S_avg, colour = Turbine)) +
+    geom_freqpoly()#binwidth = 0.2)
+
+```
+
+let's get a daily averaged energy output per turbine i.e. group by day and turbine
+
+What is the mean Active Power per month?
+
+Is there a significant Power diff between turbines?
+```{r}
+ggplot(data, aes(Turbine, P_avg)) + 
+    geom_violin()
+ggplot(data, aes(P_avg, colour = Turbine)) +
+    geom_freqpoly(binwidth = 80)
+ggplot(data, aes(P_avg, colour = Turbine)) +
+    geom_density()
+```
+
+At first look, it looks like there is no significant difference. Let's make this statment more concrete.
+
+Let's look at the distribution of wind direction 
+```{r}
+ggplot(data, aes(Wa_avg,  colour = Turbine)) +
+    geom_freqpoly(binwidth = 20)
+```
+the distributions clearly show two peaks i.e. there is a lot more wind in those two specific directions. Are these wind directions related to month of the year? Looking at just one turbine:
+```{r}
+data %>% 
+    filter(Turbine == "T1") %>%
+    ggplot(aes(Wa_avg, y = ..density.., colour = factor(month))) +
+    geom_freqpoly(binwidth = 20)
+```
+Inclonclusive. There is no clear pattern between time of year and wind direction. What else could explain these patterns? Outdoor temp?
+```{r}
+data %>% 
+    filter(Turbine == "T1") %>%
+    ggplot(aes(Wa_avg, Ot_avg)) + 
+    geom_hex() +
+    scale_fill_viridis()
+```
+
+Perhaps we can see a slight difference here. Very hard to see. Also not conclusive
+
+Then summarise. 
+Note: we are taking the avg of avgs. This is the same as the total avg if 
+the sample sizes are all the same, in this case we can assume that they are. Otherwise would have to use: `weighted.mean`
+```{r}
+month_avgP <- data %>% 
+    group_by(month, Turbine) %>%  # group by month, and turbine
+    summarize(monthlyPavg = mean(P_avg, na.rm = TRUE)) 
+# calculate the monthly mean of power
+```
+
+avg by day
+```{r}
+day_avgP <- data %>% 
+    group_by(jday, Turbine) %>%  # group by day, and turbine
+    summarize(dailyPavg = mean(P_avg, na.rm = TRUE)) 
+# calculate the daiy mean of power
+```
+
+First we plot monthly avg Power over 2017
+```{r}
+ggplot(month_avgP, aes(month, month_avg_P)) +
+    geom_line(mapping = aes(color = Turbine)) 
+```
+
+notice how there is an order in power. Why is there an order in turbine power, constantly throughout the year?
+
+Next we plot daily avg Power over 2017
+```{r}
+ggplot(day_avgP, aes(jday, dailyPavg)) +
+    geom_line(mapping = aes(color = Wind_turbine_name)) 
+```
+
+find times when the turbine stopped
+
+what var is most highly correlated with Power?
+
+next look at avg wind speed vs wind direction
+```{r}
+ggplot(data, aes(Wa_avg, Ws_avg)) +
+    geom_point(alpha = 0.3) + #mapping = aes(color = Wind_turbine_name))
+    facet_wrap(~ Turbine) 
+```
+
+What is special about these points? It's the speeding-up or slowing-down values
+```{r}
+ggplot(data, aes(Ws_avg, P_avg, colour = Rs_avg < 8)) + 
+    geom_point(alpha = 0.4) 
+```
+look at the weird data:
+```{r}
+data %>% filter(Ws_avg > 12.5 & between(P_avg, 1000, 1500))
+normaldata <- summary(filter(data, Ws_avg < 11 & between(P_avg, 1000, 1500)))
+normaldata[c(4),] # picks out mean
+```
+
+```{r}
+ggplot(data, aes(I(Ws_avg^3), P_avg)) + 
+    geom_point(alpha = 0.1) + 
+    geom_smooth(colour = "red") + 
+    theme_bw()
+```
+
+
+
 
 

@@ -5,7 +5,7 @@ date: "3 September 2017"
 output: html_document
 ---
 
-#La Haute Borne wind park
+# La Haute Borne wind park
 
 ## Notes: Some initial questions
 
